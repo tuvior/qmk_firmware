@@ -72,9 +72,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
   [_RAISE] = LAYOUT_split_3x6_3(
   //,-----------------------------------------------------.                    ,-----------------------------------------------------.
-      KC_GRV,  KC_LBRC, KC_RBRC, KC_LCBR, KC_RCBR, KC_LABK,                      KC_RABK, KC_GRV , KC_BSLS, KC_TILD, XXXXXXX, _______,
+      KC_GRV,  KC_LBRC, KC_RBRC, KC_LCBR, KC_RCBR, KC_LABK,                      KC_RABK, KC_GRV , KC_BSLS, KC_TILD, BTC    , _______,
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
-      _______, KC_EXLM, KC_AT,   KC_HASH, KC_DLR,  KC_PERC,                      KC_CIRC, KC_AMPR, KC_ASTR, KC_LPRN, KC_RPRN, _______,
+      _______, KC_EXLM, KC_AT,   KC_HASH, KC_DLR,  KC_PERC,                      KC_CIRC, KC_AMPR, KC_ASTR, KC_LPRN, KC_RPRN, ETH    ,
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
       _______, AIGU,    GRAVE,   CIRC,    XXXXXXX, XXXXXXX,                      XXXXXXX, CCDL,    KC_PIPE, KC_UNDS, XXXXXXX, _______,
   //|--------+--------+--------+--------+--------+--------+--------|  |--------+--------+--------+--------+--------+--------+--------|

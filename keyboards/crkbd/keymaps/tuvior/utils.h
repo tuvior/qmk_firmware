@@ -77,7 +77,9 @@ enum unicode_names {
   I_CIRC,
   I_CIRC_U,
   C_CEDIL,
-  C_CEDIL_U
+  C_CEDIL_U,
+  BTCS,
+  ETHS,
 };
 
 const uint32_t PROGMEM unicode_map[] = {
@@ -95,6 +97,8 @@ const uint32_t PROGMEM unicode_map[] = {
   [I_CIRC_U]  = 0x00EE - 32,    // Î
   [C_CEDIL]  = 0x00E7,          // ç
   [C_CEDIL_U]  = 0x00E7 - 32,   // Ç
+  [BTCS] = 0x20BF,              // ₿
+  [ETHS] = 0x039E,              // Ξ
 };
 
 #define ULETTER(L) XP(L, (L + 1))
@@ -106,6 +110,8 @@ const uint32_t PROGMEM unicode_map[] = {
 #define ACRC ULETTER(A_CIRC)
 #define ICRC ULETTER(I_CIRC)
 #define CCDL ULETTER(C_CEDIL)
+#define BTC X(BTCS)
+#define ETH X(ETHS)
 
 
 #define LAYOUT_split_3x6_3_(...) LAYOUT_split_3x6_3(__VA_ARGS__)
