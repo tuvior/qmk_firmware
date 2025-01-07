@@ -60,6 +60,7 @@ enum keycodes {
 
 #define AIGU RALT(KC_QUOT)
 #define GRAVE RALT(KC_GRV)
+#define UMLAUT RALT(LSFT(KC_QUOT))
 
 
 // Accented characters
