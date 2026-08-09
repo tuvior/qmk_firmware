@@ -60,27 +60,14 @@ enum keycodes {
 #define S_UPL LCTL(LSFT(KC_1))
 #define S_WIN LCTL(LSFT(KC_2))
 #define S_SCR LCTL(LSFT(KC_3))
-#define S_REG LCTL(LSFT(KC_4))
 
+// Windows English International accents
 #define AIGU RALT(KC_QUOT)
 #define GRAVE RALT(KC_GRV)
 #define UMLAUT RALT(LSFT(KC_QUOT))
 
-
-// Accented characters
+// Symbols that still require OS-specific Unicode input
 enum unicode_names {
-  E_GRAVE,
-  E_GRAVE_U,
-  E_AIGU,
-  E_AIGU_U,
-  A_GRAVE,
-  A_GRAVE_U,
-  E_CIRC,
-  E_CIRC_U,
-  A_CIRC,
-  A_CIRC_U,
-  I_CIRC,
-  I_CIRC_U,
   C_CEDIL,
   C_CEDIL_U,
   BTCS,
@@ -88,36 +75,15 @@ enum unicode_names {
 };
 
 const uint32_t PROGMEM unicode_map[] = {
-  [E_GRAVE]  = 0x00E8,          // è
-  [E_GRAVE_U]  = 0x00E8 - 32,   // È
-  [E_AIGU]  = 0x00E9,           // é
-  [E_AIGU_U]  = 0x00E9 - 32,    // É
-  [A_GRAVE]  = 0x00E0,          // à
-  [A_GRAVE_U]  = 0x00E0 - 32,   // À
-  [E_CIRC]  = 0x00EA,           // ê
-  [E_CIRC_U]  = 0x00EA - 32,    // Ê
-  [A_CIRC]  = 0x00E2,           // â
-  [A_CIRC_U]  = 0x00E2 - 32,    // Â
-  [I_CIRC]  = 0x00EE,           // î
-  [I_CIRC_U]  = 0x00EE - 32,    // Î
-  [C_CEDIL]  = 0x00E7,          // ç
-  [C_CEDIL_U]  = 0x00E7 - 32,   // Ç
+  [C_CEDIL] = 0x00E7,           // ç
+  [C_CEDIL_U] = 0x00C7,         // Ç
   [BTCS] = 0x20BF,              // ₿
   [ETHS] = 0x039E,              // Ξ
 };
 
-#define ULETTER(L) UP(L, (L + 1))
-
-#define EGRV ULETTER(E_GRAVE)
-#define EAIG ULETTER(E_AIGU)
-#define AGRV ULETTER(A_GRAVE)
-#define ECRC ULETTER(E_CIRC)
-#define ACRC ULETTER(A_CIRC)
-#define ICRC ULETTER(I_CIRC)
-#define CCDL ULETTER(C_CEDIL)
+#define CCDL UP(C_CEDIL, C_CEDIL_U)
 #define BTC UM(BTCS)
 #define ETH UM(ETHS)
-
 
 #define LAYOUT_split_3x6_3_(...) LAYOUT_split_3x6_3(__VA_ARGS__)
 

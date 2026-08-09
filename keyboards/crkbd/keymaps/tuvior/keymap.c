@@ -118,6 +118,14 @@ static void tap_tmux_key(uint16_t keycode) {
   tap_code16(keycode);
 }
 
+static bool is_mac_profile(void) {
+  return keymap_config.swap_lctl_lgui && keymap_config.swap_rctl_rgui;
+}
+
+static bool is_windows_profile(void) {
+  return get_unicode_input_mode() == UNICODE_MODE_WINCOMPOSE;
+}
+
 layer_state_t layer_state_set_user(layer_state_t state) {
   return update_tri_layer_state(state, _LOWER, _RAISE, _ADJUST);
 }
@@ -361,11 +369,82 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         set_single_persistent_default_layer(_COLEMAK);
       }
       return false;
+    case AIGU:
+      if (is_windows_profile()) {
+        return true;
+      }
+      if (record->event.pressed) {
+        tap_code16(RALT(KC_F));
+      }
+      return false;
+    case GRAVE:
+      if (is_windows_profile()) {
+        return true;
+      }
+      if (record->event.pressed) {
+        tap_code16(RALT(KC_S));
+      }
+      return false;
     case CIRC:
       if (record->event.pressed) {
-        register_code(KC_RALT);
-        tap_code(KC_6);
-        unregister_code(KC_RALT);
+        if (is_windows_profile()) {
+          register_code(KC_RALT);
+          tap_code(KC_6);
+          unregister_code(KC_RALT);
+        } else {
+          tap_code16(RALT(KC_X));
+        }
+      }
+      return false;
+    case UMLAUT:
+      if (is_windows_profile()) {
+        return true;
+      }
+      if (record->event.pressed) {
+        tap_code16(RALT(KC_G));
+      }
+      return false;
+    case CCDL:
+      if (is_windows_profile()) {
+        return true;
+      }
+      if (record->event.pressed) {
+        tap_code16(RALT(KC_C));
+      }
+      return false;
+    case S_UPL:
+      if (!is_mac_profile()) {
+        return true;
+      }
+      if (record->event.pressed) {
+        // macOS: open the Screenshot app (the closest equivalent to upload/options).
+        tap_code16(LGUI(LSFT(KC_5)));
+      }
+      return false;
+    case S_WIN:
+      if (!is_mac_profile()) {
+        return true;
+      }
+      if (record->event.pressed) {
+        // macOS window capture is Command-Shift-4 followed by Space.
+        tap_code16(LGUI(LSFT(KC_4)));
+        tap_code(KC_SPC);
+      }
+      return false;
+    case S_SCR:
+      if (!is_mac_profile()) {
+        return true;
+      }
+      if (record->event.pressed) {
+        tap_code16(LGUI(LSFT(KC_3)));
+      }
+      return false;
+    case KC_PSCR:
+      if (!is_mac_profile()) {
+        return true;
+      }
+      if (record->event.pressed) {
+        tap_code16(LGUI(LSFT(KC_4)));
       }
       return false;
     case OS_MAC:
