@@ -1,0 +1,91 @@
+{
+  "display": {
+    "columns": 5,
+    "rows": 16,
+    "pixel_width": 32,
+    "pixel_height": 128,
+    "font_width": 6,
+    "font_height": 8
+  },
+  "positions": {
+    "corne_logo": {"x": 1, "y": 0},
+    "layout_label": {"x": 0, "y": 26},
+    "os_bitmap": {"x": 0, "y": 36},
+    "layer": {"column": 0, "row": 8},
+    "layer_label": {"x": 0, "y": 90},
+    "gui_alt": {"column": 0, "row": 12},
+    "ctrl_shift": {"column": 0, "row": 14},
+    "wpm_number": {"x": 0, "y": 0},
+    "wpm_label": {"x": 0, "y": 27},
+    "chart": {"x": 0, "y": 39, "width": 32, "height": 49},
+    "peak_label": {"x": 0, "y": 96},
+    "peak_number": {"x": 0, "y": 104}
+  },
+  "labels": {
+    "layout_qwerty": "QWERTY",
+    "layout_colemak": "COLEMAK",
+    "layer_default": "BASE",
+    "layer_lower": "LOWER",
+    "layer_raise": "RAISE",
+    "layer_adjust": "ADJUST",
+    "wpm": "WPM",
+    "peak": "MAX"
+  },
+  "assets": {
+    "corne_logo": [
+      "80 81 82 83 84",
+      "a0 a1 a2 a3 a4",
+      "c0 c1 c2 c3 c4"
+    ],
+    "layers": {
+      "default": ["20 94 95 96 20", "20 b4 b5 b6 20", "20 d4 d5 d6 20"],
+      "raise": ["20 97 98 99 20", "20 b7 b8 b9 20", "20 d7 d8 d9 20"],
+      "lower": ["20 9a 9b 9c 20", "20 ba bb bc 20", "20 da db dc 20"],
+      "adjust": ["20 9d 9e 9f 20", "20 bd be bf 20", "20 dd de df 20"]
+    },
+    "modifier_pairs": {
+      "gui_alt": {
+        "off_off": ["85 86 c5 87 88", "a5 a6 c6 a7 a8"],
+        "on_off": ["8d 8e c7 87 88", "ad ae c8 a7 a8"],
+        "off_on": ["85 86 c9 8f 90", "a5 a6 ca af b0"],
+        "on_on": ["8d 8e cb 8f 90", "ad ae cc af b0"]
+      },
+      "ctrl_shift": {
+        "off_off": ["89 8a c5 8b 8c", "a9 aa c6 ab ac"],
+        "on_off": ["91 92 c7 8b 8c", "b1 b2 c8 ab ac"],
+        "off_on": ["89 8a c9 cd ce", "a9 aa ca cf d0"],
+        "on_on": ["91 92 cb cd ce", "b1 b2 cc cf d0"]
+      }
+    }
+  },
+  "previews": [
+    {
+      "name": "Colemak / macOS / base",
+      "layout": "colemak", "os": "macos", "layer": "default",
+      "gui": true, "alt": false, "ctrl": false, "shift": true,
+      "wpm": 68, "peak": 97,
+      "history": [18, 24, 31, 38, 45, 42, 51, 58, 54, 61, 64, 59, 52, 47, 55, 63, 68, 66, 71, 74, 69, 62, 58, 65, 72, 76, 73, 79, 82, 78, 84, 88]
+    },
+    {
+      "name": "QWERTY / Linux / lower",
+      "layout": "qwerty", "os": "linux", "layer": "lower",
+      "gui": false, "alt": true, "ctrl": false, "shift": false,
+      "wpm": 42, "peak": 76,
+      "history": [0, 0, 12, 18, 25, 33, 29, 38, 42, 47, 43, 36, 31, 39, 44, 48, 51, 46, 40, 35, 41, 45, 49, 53, 50, 46, 43, 47, 51, 48, 45, 42]
+    },
+    {
+      "name": "QWERTY / Windows / raise",
+      "layout": "qwerty", "os": "windows", "layer": "raise",
+      "gui": false, "alt": false, "ctrl": true, "shift": false,
+      "wpm": 81, "peak": 104,
+      "history": [27, 34, 41, 49, 57, 63, 68, 72, 66, 59, 64, 71, 78, 83, 79, 74, 81, 86, 90, 84, 77, 82, 88, 93, 97, 91, 86, 89, 94, 87, 84, 81]
+    },
+    {
+      "name": "Colemak / macOS / adjust",
+      "layout": "colemak", "os": "macos", "layer": "adjust",
+      "gui": true, "alt": true, "ctrl": true, "shift": true,
+      "wpm": 104, "peak": 121,
+      "history": [61, 68, 72, 79, 84, 91, 87, 95, 101, 97, 92, 99, 106, 112, 108, 102, 96, 104, 111, 116, 109, 103, 107, 114, 119, 115, 110, 106, 112, 108, 105, 104]
+    }
+  ]
+}

@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include QMK_KEYBOARD_H
 #include "keycode_config.h"
+#include "oled/layout.generated.h"
 #include "utils.h"
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -98,11 +99,13 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 uint8_t maxWPM = 0;
 
-char wpm_str[5] = {};
-char max_wpm_str[5] = {};
-
 #ifdef OLED_ENABLE
-static uint32_t wpm_display_timer = 0;
+static uint8_t  displayed_wpm                         = 0;
+static uint8_t  wpm_history[OLED_LAYOUT_HISTORY_SIZE] = {};
+static uint32_t wpm_display_timer                     = 0;
+static uint32_t wpm_history_timer                     = 0;
+static bool     performance_display_dirty             = true;
+static bool     wpm_chart_dirty                       = true;
 #endif
 
 static void set_host_profile(bool mac_mode, uint8_t unicode_mode) {
@@ -135,227 +138,246 @@ oled_rotation_t oled_init_user(oled_rotation_t rotation) {
   return OLED_ROTATION_270;
 }
 
-void render_space(void) {
-  oled_write_P(PSTR("     "), false);
-}
-
-void render_mod_status_gui_alt(uint8_t modifiers) {
-  static const char PROGMEM gui_off_1[] = {0x85, 0x86, 0};
-  static const char PROGMEM gui_off_2[] = {0xa5, 0xa6, 0};
-  static const char PROGMEM gui_on_1[]  = {0x8d, 0x8e, 0};
-  static const char PROGMEM gui_on_2[]  = {0xad, 0xae, 0};
-
-  static const char PROGMEM alt_off_1[] = {0x87, 0x88, 0};
-  static const char PROGMEM alt_off_2[] = {0xa7, 0xa8, 0};
-  static const char PROGMEM alt_on_1[]  = {0x8f, 0x90, 0};
-  static const char PROGMEM alt_on_2[]  = {0xaf, 0xb0, 0};
-
-  // fillers between the modifier icons bleed into the icon frames
-  static const char PROGMEM off_off_1[] = {0xc5, 0};
-  static const char PROGMEM off_off_2[] = {0xc6, 0};
-  static const char PROGMEM on_off_1[]  = {0xc7, 0};
-  static const char PROGMEM on_off_2[]  = {0xc8, 0};
-  static const char PROGMEM off_on_1[]  = {0xc9, 0};
-  static const char PROGMEM off_on_2[]  = {0xca, 0};
-  static const char PROGMEM on_on_1[]   = {0xcb, 0};
-  static const char PROGMEM on_on_2[]   = {0xcc, 0};
-
-  if (modifiers & MOD_MASK_GUI) {
-    oled_write_P(gui_on_1, false);
-  } else {
-    oled_write_P(gui_off_1, false);
-  }
-
-  if ((modifiers & MOD_MASK_GUI) && (modifiers & MOD_MASK_ALT)) {
-    oled_write_P(on_on_1, false);
-  } else if (modifiers & MOD_MASK_GUI) {
-    oled_write_P(on_off_1, false);
-  } else if (modifiers & MOD_MASK_ALT) {
-    oled_write_P(off_on_1, false);
-  } else {
-    oled_write_P(off_off_1, false);
-  }
-
-  if (modifiers & MOD_MASK_ALT) {
-    oled_write_P(alt_on_1, false);
-  } else {
-    oled_write_P(alt_off_1, false);
-  }
-
-  if (modifiers & MOD_MASK_GUI) {
-    oled_write_P(gui_on_2, false);
-  } else {
-    oled_write_P(gui_off_2, false);
-  }
-
-  if (modifiers & MOD_MASK_GUI & MOD_MASK_ALT) {
-    oled_write_P(on_on_2, false);
-  } else if (modifiers & MOD_MASK_GUI) {
-    oled_write_P(on_off_2, false);
-  } else if (modifiers & MOD_MASK_ALT) {
-    oled_write_P(off_on_2, false);
-  } else {
-    oled_write_P(off_off_2, false);
-  }
-
-  if (modifiers & MOD_MASK_ALT) {
-    oled_write_P(alt_on_2, false);
-  } else {
-    oled_write_P(alt_off_2, false);
+static void render_bitmap_P(uint8_t x, uint8_t y, uint8_t width, uint8_t height, const uint8_t *bitmap) {
+  for (uint8_t pixel_y = 0; pixel_y < height; pixel_y++) {
+    for (uint8_t column = 0; column < width; column++) {
+      uint16_t source_index = (pixel_y / 8) * width + column;
+      uint8_t  source_byte  = pgm_read_byte(&bitmap[source_index]);
+      oled_write_pixel(x + column, y + pixel_y, source_byte & (1 << (pixel_y % 8)));
+    }
   }
 }
 
-void render_wpm(void) {
-  oled_write_ln(wpm_str, false);
+static void clear_pixel_region(uint8_t x, uint8_t y, uint8_t width, uint8_t height) {
+  for (uint8_t pixel_y = y; pixel_y < y + height; pixel_y++) {
+    for (uint8_t column = 0; column < width; column++) {
+      oled_write_pixel(x + column, pixel_y, false);
+    }
+  }
 }
 
-void render_max_wpm(void) {
-  oled_write_ln(max_wpm_str, false);
+static void render_modifier_pair(uint8_t modifiers, uint8_t first_mask, uint8_t second_mask, const char *off_off, const char *on_off, const char *off_on, const char *on_on) {
+  if ((modifiers & first_mask) && (modifiers & second_mask)) {
+    oled_write_P(on_on, false);
+  } else if (modifiers & first_mask) {
+    oled_write_P(on_off, false);
+  } else if (modifiers & second_mask) {
+    oled_write_P(off_on, false);
+  } else {
+    oled_write_P(off_off, false);
+  }
 }
 
-void update_wpm_display(void) {
-  uint8_t wpm = get_current_wpm();
+static void render_state_display(void) {
+  static uint8_t previous_layout      = UINT8_MAX;
+  static uint8_t previous_host        = UINT8_MAX;
+  static uint8_t previous_layer       = UINT8_MAX;
+  static uint8_t previous_modifiers   = UINT8_MAX;
+  uint8_t        layout               = get_highest_layer(default_layer_state) == _COLEMAK;
+  uint8_t        host                 = is_mac_profile() ? 0 : (is_windows_profile() ? 2 : 1);
+  uint8_t        highest_layer        = get_highest_layer(layer_state);
+  uint8_t        layer                = highest_layer == _LOWER ? 1 : (highest_layer == _RAISE ? 2 : (highest_layer == _ADJUST ? 3 : 0));
+  uint8_t        modifiers            = get_mods() | get_oneshot_mods();
 
-  if (wpm > maxWPM) maxWPM = wpm;
-
-  if (timer_elapsed32(wpm_display_timer) < 500) {
+  if (layout == previous_layout && host == previous_host && layer == previous_layer && modifiers == previous_modifiers) {
     return;
   }
 
-  snprintf(wpm_str, sizeof(wpm_str), "%4d", wpm);
-  snprintf(max_wpm_str, sizeof(max_wpm_str), "%4d", maxWPM);
-  wpm_display_timer = timer_read32();
+  render_bitmap_P(
+    OLED_LAYOUT_CORNE_LOGO_X,
+    OLED_LAYOUT_CORNE_LOGO_Y,
+    OLED_BITMAP_CORNE_LOGO_WIDTH,
+    OLED_BITMAP_CORNE_LOGO_HEIGHT,
+    oled_bitmap_corne_logo
+  );
+
+  if (layout) {
+    render_bitmap_P(
+      OLED_LAYOUT_LAYOUT_LABEL_X,
+      OLED_LAYOUT_LAYOUT_LABEL_Y,
+      OLED_BITMAP_LABEL_LAYOUT_COLEMAK_WIDTH,
+      OLED_BITMAP_LABEL_LAYOUT_COLEMAK_HEIGHT,
+      oled_bitmap_label_layout_colemak
+    );
+  } else {
+    render_bitmap_P(
+      OLED_LAYOUT_LAYOUT_LABEL_X,
+      OLED_LAYOUT_LAYOUT_LABEL_Y,
+      OLED_BITMAP_LABEL_LAYOUT_QWERTY_WIDTH,
+      OLED_BITMAP_LABEL_LAYOUT_QWERTY_HEIGHT,
+      oled_bitmap_label_layout_qwerty
+    );
+  }
+
+  if (host == 0) {
+    render_bitmap_P(OLED_LAYOUT_OS_BITMAP_X, OLED_LAYOUT_OS_BITMAP_Y, OLED_BITMAP_OS_MACOS_WIDTH, OLED_BITMAP_OS_MACOS_HEIGHT, oled_bitmap_os_macos);
+  } else if (host == 2) {
+    render_bitmap_P(OLED_LAYOUT_OS_BITMAP_X, OLED_LAYOUT_OS_BITMAP_Y, OLED_BITMAP_OS_WINDOWS_WIDTH, OLED_BITMAP_OS_WINDOWS_HEIGHT, oled_bitmap_os_windows);
+  } else {
+    render_bitmap_P(OLED_LAYOUT_OS_BITMAP_X, OLED_LAYOUT_OS_BITMAP_Y, OLED_BITMAP_OS_LINUX_WIDTH, OLED_BITMAP_OS_LINUX_HEIGHT, oled_bitmap_os_linux);
+  }
+
+  oled_set_cursor(OLED_LAYOUT_LAYER_COLUMN, OLED_LAYOUT_LAYER_ROW);
+  if (layer == 1) {
+    oled_write_P(oled_layer_lower, false);
+    render_bitmap_P(OLED_LAYOUT_LAYER_LABEL_X, OLED_LAYOUT_LAYER_LABEL_Y, OLED_BITMAP_LABEL_LAYER_LOWER_WIDTH, OLED_BITMAP_LABEL_LAYER_LOWER_HEIGHT, oled_bitmap_label_layer_lower);
+  } else if (layer == 2) {
+    oled_write_P(oled_layer_raise, false);
+    render_bitmap_P(OLED_LAYOUT_LAYER_LABEL_X, OLED_LAYOUT_LAYER_LABEL_Y, OLED_BITMAP_LABEL_LAYER_RAISE_WIDTH, OLED_BITMAP_LABEL_LAYER_RAISE_HEIGHT, oled_bitmap_label_layer_raise);
+  } else if (layer == 3) {
+    oled_write_P(oled_layer_adjust, false);
+    render_bitmap_P(OLED_LAYOUT_LAYER_LABEL_X, OLED_LAYOUT_LAYER_LABEL_Y, OLED_BITMAP_LABEL_LAYER_ADJUST_WIDTH, OLED_BITMAP_LABEL_LAYER_ADJUST_HEIGHT, oled_bitmap_label_layer_adjust);
+  } else {
+    oled_write_P(oled_layer_default, false);
+    render_bitmap_P(OLED_LAYOUT_LAYER_LABEL_X, OLED_LAYOUT_LAYER_LABEL_Y, OLED_BITMAP_LABEL_LAYER_DEFAULT_WIDTH, OLED_BITMAP_LABEL_LAYER_DEFAULT_HEIGHT, oled_bitmap_label_layer_default);
+  }
+
+  oled_set_cursor(OLED_LAYOUT_GUI_ALT_COLUMN, OLED_LAYOUT_GUI_ALT_ROW);
+  render_modifier_pair(modifiers, MOD_MASK_GUI, MOD_MASK_ALT, oled_gui_alt_off_off, oled_gui_alt_on_off, oled_gui_alt_off_on, oled_gui_alt_on_on);
+  oled_set_cursor(OLED_LAYOUT_CTRL_SHIFT_COLUMN, OLED_LAYOUT_CTRL_SHIFT_ROW);
+  render_modifier_pair(modifiers, MOD_MASK_CTRL, MOD_MASK_SHIFT, oled_ctrl_shift_off_off, oled_ctrl_shift_on_off, oled_ctrl_shift_off_on, oled_ctrl_shift_on_on);
+
+  previous_layout    = layout;
+  previous_host      = host;
+  previous_layer     = layer;
+  previous_modifiers = modifiers;
 }
 
-void render_mod_status_ctrl_shift(uint8_t modifiers) {
-  static const char PROGMEM ctrl_off_1[] = {0x89, 0x8a, 0};
-  static const char PROGMEM ctrl_off_2[] = {0xa9, 0xaa, 0};
-  static const char PROGMEM ctrl_on_1[]  = {0x91, 0x92, 0};
-  static const char PROGMEM ctrl_on_2[]  = {0xb1, 0xb2, 0};
+static uint8_t digit_count(uint8_t value) {
+  if (value >= 100) {
+    return 3;
+  }
+  if (value >= 10) {
+    return 2;
+  }
+  return 1;
+}
 
-  static const char PROGMEM shift_off_1[] = {0x8b, 0x8c, 0};
-  static const char PROGMEM shift_off_2[] = {0xab, 0xac, 0};
-  static const char PROGMEM shift_on_1[]  = {0xcd, 0xce, 0};
-  static const char PROGMEM shift_on_2[]  = {0xcf, 0xd0, 0};
+static void render_large_number(uint8_t value, uint8_t y) {
+  uint8_t digits[3] = {};
+  uint8_t count     = digit_count(value);
+  uint8_t scale     = count <= 2 ? 3 : 2;
+  uint8_t width     = count * OLED_LAYOUT_DIGIT_WIDTH * scale + count - 1;
+  uint8_t x         = (OLED_LAYOUT_PIXEL_WIDTH - width) / 2;
 
-  // fillers between the modifier icons bleed into the icon frames
-  static const char PROGMEM off_off_1[] = {0xc5, 0};
-  static const char PROGMEM off_off_2[] = {0xc6, 0};
-  static const char PROGMEM on_off_1[]  = {0xc7, 0};
-  static const char PROGMEM on_off_2[]  = {0xc8, 0};
-  static const char PROGMEM off_on_1[]  = {0xc9, 0};
-  static const char PROGMEM off_on_2[]  = {0xca, 0};
-  static const char PROGMEM on_on_1[]   = {0xcb, 0};
-  static const char PROGMEM on_on_2[]   = {0xcc, 0};
+  clear_pixel_region(0, y, OLED_LAYOUT_PIXEL_WIDTH, 24);
 
-  if (modifiers & MOD_MASK_CTRL) {
-    oled_write_P(ctrl_on_1, false);
-  } else {
-    oled_write_P(ctrl_off_1, false);
+  for (uint8_t index = count; index > 0; index--) {
+    digits[index - 1] = value % 10;
+    value /= 10;
   }
 
-  if ((modifiers & MOD_MASK_CTRL) && (modifiers & MOD_MASK_SHIFT)) {
-    oled_write_P(on_on_1, false);
-  } else if (modifiers & MOD_MASK_CTRL) {
-    oled_write_P(on_off_1, false);
-  } else if (modifiers & MOD_MASK_SHIFT) {
-    oled_write_P(off_on_1, false);
-  } else {
-    oled_write_P(off_off_1, false);
-  }
+  y += (24 - OLED_LAYOUT_DIGIT_HEIGHT * scale) / 2;
+  for (uint8_t index = 0; index < count; index++) {
+    for (uint8_t row = 0; row < OLED_LAYOUT_DIGIT_HEIGHT; row++) {
+      uint8_t pixels = pgm_read_byte(&oled_digit_rows[digits[index]][row]);
 
-  if (modifiers & MOD_MASK_SHIFT) {
-    oled_write_P(shift_on_1, false);
-  } else {
-    oled_write_P(shift_off_1, false);
-  }
+      for (uint8_t column = 0; column < OLED_LAYOUT_DIGIT_WIDTH; column++) {
+        if (!(pixels & (1 << column))) {
+          continue;
+        }
 
-  if (modifiers & MOD_MASK_CTRL) {
-    oled_write_P(ctrl_on_2, false);
-  } else {
-    oled_write_P(ctrl_off_2, false);
-  }
-
-  if (modifiers & MOD_MASK_CTRL & MOD_MASK_SHIFT) {
-    oled_write_P(on_on_2, false);
-  } else if (modifiers & MOD_MASK_CTRL) {
-    oled_write_P(on_off_2, false);
-  } else if (modifiers & MOD_MASK_SHIFT) {
-    oled_write_P(off_on_2, false);
-  } else {
-    oled_write_P(off_off_2, false);
-  }
-
-  if (modifiers & MOD_MASK_SHIFT) {
-    oled_write_P(shift_on_2, false);
-  } else {
-    oled_write_P(shift_off_2, false);
+        for (uint8_t offset_y = 0; offset_y < scale; offset_y++) {
+          for (uint8_t offset_x = 0; offset_x < scale; offset_x++) {
+            oled_write_pixel(x + column * scale + offset_x, y + row * scale + offset_y, true);
+          }
+        }
+      }
+    }
+    x += OLED_LAYOUT_DIGIT_WIDTH * scale + 1;
   }
 }
 
-void render_logo(void) {
-  static const char PROGMEM corne_logo[] = {0x80, 0x81, 0x82, 0x83, 0x84, 0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0};
-  oled_write_P(corne_logo, false);
-  oled_write_P(PSTR("corne"), false);
+static uint8_t chart_y(uint8_t value, uint8_t scale_max) {
+  uint8_t bottom     = OLED_LAYOUT_CHART_Y + OLED_LAYOUT_CHART_HEIGHT - 2;
+  uint8_t plot_range = OLED_LAYOUT_CHART_HEIGHT - 3;
+
+  if (value > scale_max) {
+    value = scale_max;
+  }
+  return bottom - (uint16_t)value * plot_range / scale_max;
 }
 
-void render_layer_state(void) {
-  static const char PROGMEM default_layer[] = {0x20, 0x94, 0x95, 0x96, 0x20, 0x20, 0xb4, 0xb5, 0xb6, 0x20, 0x20, 0xd4, 0xd5, 0xd6, 0x20, 0};
-  static const char PROGMEM raise_layer[]   = {0x20, 0x97, 0x98, 0x99, 0x20, 0x20, 0xb7, 0xb8, 0xb9, 0x20, 0x20, 0xd7, 0xd8, 0xd9, 0x20, 0};
-  static const char PROGMEM lower_layer[]   = {0x20, 0x9a, 0x9b, 0x9c, 0x20, 0x20, 0xba, 0xbb, 0xbc, 0x20, 0x20, 0xda, 0xdb, 0xdc, 0x20, 0};
-  static const char PROGMEM adjust_layer[]  = {0x20, 0x9d, 0x9e, 0x9f, 0x20, 0x20, 0xbd, 0xbe, 0xbf, 0x20, 0x20, 0xdd, 0xde, 0xdf, 0x20, 0};
+static void render_wpm_chart(void) {
+  uint8_t scale_max = 60;
+  uint8_t previous_y;
 
-  switch(get_highest_layer(layer_state)) {
-    case _LOWER:
-      oled_write_P(lower_layer, false);
-      break;
-    case _RAISE:
-      oled_write_P(raise_layer, false);
-      break;
-    case _ADJUST:
-      oled_write_P(adjust_layer, false);
-      break;
-    default:
-      oled_write_P(default_layer, false);
+  for (uint8_t index = 0; index < OLED_LAYOUT_HISTORY_SIZE; index++) {
+    if (wpm_history[index] > scale_max) {
+      scale_max = wpm_history[index];
+    }
+  }
+
+  clear_pixel_region(OLED_LAYOUT_CHART_X, OLED_LAYOUT_CHART_Y, OLED_LAYOUT_CHART_WIDTH, OLED_LAYOUT_CHART_HEIGHT);
+
+  for (uint8_t x = OLED_LAYOUT_CHART_X; x < OLED_LAYOUT_CHART_X + OLED_LAYOUT_CHART_WIDTH; x += 2) {
+    oled_write_pixel(x, OLED_LAYOUT_CHART_Y + OLED_LAYOUT_CHART_HEIGHT - 1, true);
+  }
+
+  previous_y = chart_y(wpm_history[0], scale_max);
+  oled_write_pixel(OLED_LAYOUT_CHART_X, previous_y, true);
+  for (uint8_t index = 1; index < OLED_LAYOUT_HISTORY_SIZE; index++) {
+    uint8_t current_y = chart_y(wpm_history[index], scale_max);
+    int8_t  step      = current_y >= previous_y ? 1 : -1;
+
+    for (int16_t y = previous_y; y != (int16_t)current_y + step; y += step) {
+      oled_write_pixel(OLED_LAYOUT_CHART_X + index, y, true);
+    }
+    previous_y = current_y;
   }
 }
 
-void render_status_main(void) {
-  render_logo();
-  render_space();
-  render_layer_state();
-  render_space();
-  render_mod_status_gui_alt(get_mods() | get_oneshot_mods());
-  render_mod_status_ctrl_shift(get_mods() | get_oneshot_mods());
-  render_space();
-  render_wpm();
+static void update_performance_data(void) {
+  uint8_t wpm = get_current_wpm();
+
+  if (timer_elapsed32(wpm_display_timer) >= 250) {
+    if (wpm != displayed_wpm) {
+      displayed_wpm             = wpm;
+      performance_display_dirty = true;
+    }
+    if (wpm > maxWPM) {
+      maxWPM                    = wpm;
+      performance_display_dirty = true;
+    }
+    wpm_display_timer = timer_read32();
+  }
+
+  if (timer_elapsed32(wpm_history_timer) >= 1000) {
+    memmove(wpm_history, wpm_history + 1, OLED_LAYOUT_HISTORY_SIZE - 1);
+    wpm_history[OLED_LAYOUT_HISTORY_SIZE - 1] = wpm;
+    wpm_history_timer                         = timer_read32();
+    wpm_chart_dirty                           = true;
+  }
 }
 
-void render_status_secondary(void) {
-  render_logo();
-  render_space();
-  render_layer_state();
-  render_space();
-  render_mod_status_gui_alt(get_mods() | get_oneshot_mods());
-  render_mod_status_ctrl_shift(get_mods() | get_oneshot_mods());
-  render_space();
-  render_max_wpm();
+static void render_performance_display(void) {
+  if (performance_display_dirty) {
+    render_large_number(displayed_wpm, OLED_LAYOUT_WPM_NUMBER_Y);
+    render_bitmap_P(OLED_LAYOUT_WPM_LABEL_X, OLED_LAYOUT_WPM_LABEL_Y, OLED_BITMAP_LABEL_WPM_WIDTH, OLED_BITMAP_LABEL_WPM_HEIGHT, oled_bitmap_label_wpm);
+    render_bitmap_P(OLED_LAYOUT_PEAK_LABEL_X, OLED_LAYOUT_PEAK_LABEL_Y, OLED_BITMAP_LABEL_PEAK_WIDTH, OLED_BITMAP_LABEL_PEAK_HEIGHT, oled_bitmap_label_peak);
+    render_large_number(maxWPM, OLED_LAYOUT_PEAK_NUMBER_Y);
+    performance_display_dirty = false;
+  }
+
+  if (wpm_chart_dirty) {
+    render_wpm_chart();
+    wpm_chart_dirty = false;
+  }
 }
 
 bool oled_task_user(void) {
-  update_wpm_display();
+  update_performance_data();
 
   if (is_keyboard_master()) {
-    render_status_main();
+    render_state_display();
   } else {
-    render_status_secondary();
+    render_performance_display();
   }
 
   return false;
 }
 
 #endif // OLED_ENABLE
-
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
   switch (keycode) {
@@ -374,7 +396,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return true;
       }
       if (record->event.pressed) {
-        tap_code16(RALT(KC_F));
+        tap_code16(RALT(is_mac_profile() ? KC_K : KC_F));
       }
       return false;
     case GRAVE:
@@ -382,7 +404,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return true;
       }
       if (record->event.pressed) {
-        tap_code16(RALT(KC_S));
+        tap_code16(RALT(is_mac_profile() ? KC_GRV : KC_S));
       }
       return false;
     case CIRC:
@@ -392,7 +414,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
           tap_code(KC_6);
           unregister_code(KC_RALT);
         } else {
-          tap_code16(RALT(KC_X));
+          tap_code16(RALT(is_mac_profile() ? KC_L : KC_X));
         }
       }
       return false;
@@ -401,7 +423,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return true;
       }
       if (record->event.pressed) {
-        tap_code16(RALT(KC_G));
+        tap_code16(RALT(is_mac_profile() ? KC_I : KC_G));
       }
       return false;
     case CCDL:
